@@ -53,13 +53,16 @@ public:
    * @brief Initialization The Analog pH Sensor
    */
   void begin();
+  void setRange(float _acidVoltage, float _neutralVoltage);
 
 private:
-    float  _phValue;
-    float  _acidVoltage;
-    float  _neutralVoltage;
-    float  _voltage;
+    float  _phValue; // Base PH Value: 7
+    float  _acidVoltage; // Analog Value for PH: 4
+    float  _neutralVoltage; // Analog Value for PH: 7
+    float  _voltage; // Analog Value
     float  _temperature;
+	float  _acidRange[2];
+	float  _neutralRange[2];
 
     char   _cmdReceivedBuffer[ReceivedBufferLength];  //store the Serial CMD
     byte   _cmdReceivedBufferIndex;
