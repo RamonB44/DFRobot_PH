@@ -47,26 +47,37 @@ DFRobot_PH::~DFRobot_PH()
 {
 
 }
-/* add custom range from acid to neutral analog values*/
+/* add custom range from acid to neutral analog values
 void DFRobot_PH::setRange(float _acidVoltage, float _neutralVoltage){
 	this->_acidVoltage = _acidVoltage;
 	this->_neutralVoltage =  _neutralVoltage;
+}*/
+
+void DFRobot_PH::setAcidThreshold(float _min, float _max){
+	this->_acidRange[0] = _min;
+	this->_acidRange[1] = _max;
 }
 
-void DFRobot_PH::begin()
+void DFRobot_PH::setBaseThreshold(float _min, float _max){
+	this->_neutralRange[0] = _min;
+	this->_neutralRange[1] = _max;
+}
+
+void DFRobot_PH::begin(float _acidVoltage, float _neutralVoltage)
 {
     EEPROM_read(PHVALUEADDR, this->_neutralVoltage);  //load the neutral (pH = 7.0)voltage of the pH board from the EEPROM
-    Serial.print("_neutralVoltage:");
-    Serial.println(this->_neutralVoltage);
+    //Serial.print("_neutralVoltage:");
+    //Serial.println(this->_neutralVoltage);
     if(EEPROM.read(PHVALUEADDR)==0xFF && EEPROM.read(PHVALUEADDR+1)==0xFF && EEPROM.read(PHVALUEADDR+2)==0xFF && EEPROM.read(PHVALUEADDR+3)==0xFF){
-        // this->_neutralVoltage = 1500.0;  // new EEPROM, write typical voltage
+		// pendiente de corregir
+        this->_neutralVoltage = _acidVoltage;  // new EEPROM, write typical voltage
         EEPROM_write(PHVALUEADDR, this->_neutralVoltage);
     }
     EEPROM_read(PHVALUEADDR+4, this->_acidVoltage);//load the acid (pH = 4.0) voltage of the pH board from the EEPROM
-    Serial.print("_acidVoltage:");
-    Serial.println(this->_acidVoltage);
+    //Serial.print("_acidVoltage:");
+    //Serial.println(this->_acidVoltage);
     if(EEPROM.read(PHVALUEADDR+4)==0xFF && EEPROM.read(PHVALUEADDR+5)==0xFF && EEPROM.read(PHVALUEADDR+6)==0xFF && EEPROM.read(PHVALUEADDR+7)==0xFF){
-        // this->_acidVoltage = 2032.44;  // new EEPROM, write typical voltage
+        this->_acidVoltage = _neutralVoltage;  // new EEPROM, write typical voltage
         EEPROM_write(PHVALUEADDR+4, this->_acidVoltage);
     }
 }
@@ -75,10 +86,10 @@ float DFRobot_PH::readPH(float voltage, float temperature)
 {
     float slope = (7.0-4.0)/((this->_neutralVoltage-1500.0)/3.0 - (this->_acidVoltage-1500.0)/3.0);  // two point: (_neutralVoltage,7.0),(_acidVoltage,4.0)
     float intercept =  7.0 - slope*(this->_neutralVoltage-1500.0)/3.0;
-    Serial.print("slope:");
+    /*Serial.print("slope:");
     Serial.print(slope);
     Serial.print(",intercept:");
-    Serial.println(intercept);
+    Serial.println(intercept);*/
     this->_phValue = slope*(voltage-1500.0)/3.0+intercept;  //y = k*x + b
     return _phValue;
 }
@@ -89,15 +100,15 @@ void DFRobot_PH::calibration(float voltage, float temperature,char* cmd)
     this->_voltage = voltage;
     this->_temperature = temperature;
     strupr(cmd);
-    phCalibration(cmdParse(cmd));  // if received Serial CMD from the serial monitor, enter into the calibration mode
+    this->phCalibration(cmdParse(cmd));  // if received Serial CMD from the serial monitor, enter into the calibration mode
 }
 
 void DFRobot_PH::calibration(float voltage, float temperature)
 {
     this->_voltage = voltage;
     this->_temperature = temperature;
-    if(cmdSerialDataAvailable() > 0){
-        phCalibration(cmdParse());  // if received Serial CMD from the serial monitor, enter into the calibration mode
+    if(this->cmdSerialDataAvailable()){
+        this->phCalibration(cmdParse());  // if received Serial CMD from the serial monitor, enter into the calibration mode
     }
 }
 
@@ -105,29 +116,42 @@ boolean DFRobot_PH::cmdSerialDataAvailable()
 {
     char cmdReceivedChar;
     static unsigned long cmdReceivedTimeOut = millis();
-    while(Serial.available()>0){
+	// Serial.println(Serial.available());
+    while(Serial.available()){
+		
         if(millis() - cmdReceivedTimeOut > 500U){
+			// Serial.println("PASO MAS DE 5 Segundos");
             this->_cmdReceivedBufferIndex = 0;
             memset(this->_cmdReceivedBuffer,0,(ReceivedBufferLength));
+			// Serial.println("estoy disponible");
         }
         cmdReceivedTimeOut = millis();
         cmdReceivedChar = Serial.read();
-        if (cmdReceivedChar == '\n' || this->_cmdReceivedBufferIndex==ReceivedBufferLength-1){
+		/*Serial.print(this->_cmdReceivedBufferIndex);
+		Serial.print(" => ");
+		Serial.println(cmdReceivedChar);
+		Serial.print("BUFFER LENGHT ");
+		Serial.println(ReceivedBufferLength);*/
+        if (cmdReceivedChar == '\n' || cmdReceivedChar == '|' || this->_cmdReceivedBufferIndex==ReceivedBufferLength-1){
             this->_cmdReceivedBufferIndex = 0;
             strupr(this->_cmdReceivedBuffer);
             return true;
         }else{
+			// Almacena caracter por caracter en un arreglo hasta que el arreglo alcance el tamaño maximo de la caracteres o encuentre un retorno de carril o \n o |
             this->_cmdReceivedBuffer[this->_cmdReceivedBufferIndex] = cmdReceivedChar;
             this->_cmdReceivedBufferIndex++;
         }
     }
+	// Serial.println("no estoy disponible");
     return false;
 }
 
 byte DFRobot_PH::cmdParse(const char* cmd)
 {
     byte modeIndex = 0;
+	// Serial.println(cmd);
     if(strstr(cmd, "ENTERPH")      != NULL){
+		//Serial.println("INGRESE");
         modeIndex = 1;
     }else if(strstr(cmd, "EXITPH") != NULL){
         modeIndex = 3;
@@ -140,6 +164,9 @@ byte DFRobot_PH::cmdParse(const char* cmd)
 byte DFRobot_PH::cmdParse()
 {
     byte modeIndex = 0;
+	Serial.print("INGRESO AL CMD PARSE ");
+	Serial.println(this->_cmdReceivedBuffer);
+	//Serial.println(strstr(this->_cmdReceivedBuffer, "ENTERPH"));
     if(strstr(this->_cmdReceivedBuffer, "ENTERPH")      != NULL){
         modeIndex = 1;
     }else if(strstr(this->_cmdReceivedBuffer, "EXITPH") != NULL){
@@ -155,6 +182,7 @@ void DFRobot_PH::phCalibration(byte mode)
     char *receivedBufferPtr;
     static boolean phCalibrationFinish  = 0;
     static boolean enterCalibrationFlag = 0;
+	Serial.print(mode);
     switch(mode){
         case 0:
         if(enterCalibrationFlag){

@@ -52,8 +52,9 @@ public:
    * @fn begin
    * @brief Initialization The Analog pH Sensor
    */
-  void begin();
-  void setRange(float _acidVoltage, float _neutralVoltage);
+  void begin(float _acidVoltage, float _neutralVoltage);
+  void setBaseThreshold(float _min, float _max);
+  void setAcidThreshold(float _min, float _max);
 
 private:
     float  _phValue; // Base PH Value: 7
